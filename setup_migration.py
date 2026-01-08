@@ -307,40 +307,37 @@ def create_replication_triggers(conn, source_database, scylla_database, table):
             except:
                 pass
         
+        print(f"  Creating replication triggers for {source_database}.{table}...")
+        
         # Create INSERT trigger
         insert_trigger = f"""
-            CREATE TRIGGER `{source_database}`.`{table}_insert_trigger`
-            AFTER INSERT ON `{source_database}`.`{table}`
-            FOR EACH ROW
-            BEGIN
-                INSERT INTO `{scylla_database}`.`{table}` ({col_list})
-                VALUES ({new_col_list});
-            END
+CREATE TRIGGER `{source_database}`.`{table}_insert_trigger`
+AFTER INSERT ON `{source_database}`.`{table}`
+FOR EACH ROW
+INSERT INTO `{scylla_database}`.`{table}` ({col_list})
+VALUES ({new_col_list})
         """
         
-        # Create UPDATE trigger
+        # Create UPDATE trigger (delete + insert pattern)
         update_trigger = f"""
-            CREATE TRIGGER `{source_database}`.`{table}_update_trigger`
-            AFTER UPDATE ON `{source_database}`.`{table}`
-            FOR EACH ROW
-            BEGIN
-                DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause};
-                INSERT INTO `{scylla_database}`.`{table}` ({col_list})
-                VALUES ({new_col_list});
-            END
+CREATE TRIGGER `{source_database}`.`{table}_update_trigger`
+AFTER UPDATE ON `{source_database}`.`{table}`
+FOR EACH ROW
+BEGIN
+    DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause};
+    INSERT INTO `{scylla_database}`.`{table}` ({col_list})
+    VALUES ({new_col_list});
+END
         """
         
         # Create DELETE trigger
         delete_trigger = f"""
-            CREATE TRIGGER `{source_database}`.`{table}_delete_trigger`
-            AFTER DELETE ON `{source_database}`.`{table}`
-            FOR EACH ROW
-            BEGIN
-                DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause};
-            END
+CREATE TRIGGER `{source_database}`.`{table}_delete_trigger`
+AFTER DELETE ON `{source_database}`.`{table}`
+FOR EACH ROW
+DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause}
         """
         
-        print(f"  Creating replication triggers for {source_database}.{table}...")
         cursor.execute(insert_trigger)
         print(f"    ✓ INSERT trigger created")
         cursor.execute(update_trigger)
