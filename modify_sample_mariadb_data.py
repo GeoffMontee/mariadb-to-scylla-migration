@@ -75,7 +75,7 @@ def parse_arguments():
     
     # MariaDB options
     mariadb_group = parser.add_argument_group('MariaDB options')
-    mariadb_group.add_argument('--mariadb-host', default='localhost',
+    mariadb_group.add_argument('--mariadb-host', default='127.0.0.1',
                               help='MariaDB host')
     mariadb_group.add_argument('--mariadb-port', type=int, default=3306,
                               help='MariaDB port')
