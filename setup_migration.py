@@ -444,16 +444,20 @@ def mariadb_type_to_cql_type(mariadb_type):
         'mediumblob': 'blob',
         'longblob': 'blob',
         'date': 'date',
-        'time': 'time',
         'datetime': 'timestamp',
         'timestamp': 'timestamp',
+        'time': 'time',
     }
     
     mariadb_type_lower = mariadb_type.lower()
     
-    # Handle types with parameters
-    for key in type_mapping:
-        if mariadb_type_lower.startswith(key):
+    # Handle types with parameters (e.g., varchar(100) -> varchar)
+    base_type = mariadb_type_lower.split('(')[0]
+    
+    # Check for exact or prefix match, but prioritize longer matches first
+    # Sort by length descending to match 'timestamp' before 'time'
+    for key in sorted(type_mapping.keys(), key=len, reverse=True):
+        if base_type.startswith(key):
             return type_mapping[key]
     
     # Check for UUID (stored as BINARY(16) or CHAR(36) in MariaDB)
