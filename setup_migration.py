@@ -150,25 +150,10 @@ def connect_to_scylla(args):
 
 
 def configure_storage_engine(conn, args):
-    """Configure MariaDB ScyllaDB storage engine global variables."""
-    cursor = conn.cursor()
-    try:
-        print(f"  Setting scylla_hosts to '{args.scylla_fdw_host}'...")
-        cursor.execute(f"SET GLOBAL scylla_hosts = '{args.scylla_fdw_host}'")
-        
-        print(f"  Setting scylla_port to {args.scylla_port}...")
-        cursor.execute(f"SET GLOBAL scylla_port = {args.scylla_port}")
-        
-        print(f"  Setting scylla_keyspace to '{args.scylla_ks}'...")
-        cursor.execute(f"SET GLOBAL scylla_keyspace = '{args.scylla_ks}'")
-        
-        print(f"  ✓ Storage engine configured successfully")
-        
-    except Exception as e:
-        print(f"  ✗ Error configuring storage engine: {e}")
-        raise
-    finally:
-        cursor.close()
+    """Configure MariaDB ScyllaDB storage engine (deprecated - using per-table COMMENT instead)."""
+    # Global variables don't persist across restarts and aren't available in trigger context
+    # Connection info is now embedded in each table's COMMENT field
+    print(f"  ℹ Using per-table connection configuration (embedded in COMMENT)")
 
 
 def create_scylla_database(conn, scylla_database):
@@ -230,7 +215,7 @@ def get_table_schema(conn, database, table):
         cursor.close()
 
 
-def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_keyspace, table):
+def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_keyspace, scylla_host, scylla_port, table):
     """Create a ScyllaDB-backed table in the scylla_database."""
     cursor = conn.cursor()
     try:
@@ -258,11 +243,14 @@ def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_k
         if primary_keys:
             column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
         
+        # Embed connection info in COMMENT (persists across restarts)
+        comment = f"scylla_host={scylla_host};scylla_port={scylla_port};scylla_keyspace={scylla_keyspace};scylla_table={table}"
+        
         create_stmt = f"""
             CREATE TABLE IF NOT EXISTS `{scylla_database}`.`{table}` (
                 {', '.join(column_defs)}
             ) ENGINE=SCYLLA
-            CONNECTION='keyspace={scylla_keyspace} table={table}'
+            COMMENT='{comment}'
         """
         
         print(f"  Creating ScyllaDB-backed table {scylla_database}.{table}...")
@@ -396,7 +384,8 @@ def setup_table_migration(mariadb_conn, scylla_session, table_name, args):
         create_scylla_table(scylla_session, table_name, columns, pk_columns, args.scylla_ks)
         
         # Create ScyllaDB-backed table in MariaDB scylla_database
-        create_mariadb_scylla_table(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, args.scylla_ks, table_name)
+        create_mariadb_scylla_table(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, 
+                                    args.scylla_ks, args.scylla_fdw_host, args.scylla_port, table_name)
         
         # Create triggers to replicate changes
         create_replication_triggers(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, table_name)
