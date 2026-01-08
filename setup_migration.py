@@ -244,7 +244,7 @@ def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_k
             column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
         
         # Embed connection info in COMMENT (persists across restarts)
-        comment = f"scylla_host={scylla_host};scylla_port={scylla_port};scylla_keyspace={scylla_keyspace};scylla_table={table}"
+        comment = f"scylla_hosts={scylla_host};scylla_keyspace={scylla_keyspace};scylla_table={table}"
         
         create_stmt = f"""
             CREATE TABLE IF NOT EXISTS `{scylla_database}`.`{table}` (
