@@ -317,13 +317,15 @@ print(f"Insert with trigger: {elapsed:.3f}s")
 - Includes Rust toolchain for cpp-rs-driver
 
 ### Storage Engine Dependencies
-The storage engine requires these files (from mariadb-scylla-storage-engine repo):
+The Dockerfile automatically clones the storage engine repository and copies these files during the Docker build:
 - `ha_scylla.cc` / `ha_scylla.h`
 - `scylla_connection.cc` / `scylla_connection.h`
 - `scylla_types.cc` / `scylla_types.h`
 - `scylla_query.cc` / `scylla_query.h`
 - `plugin.cmake`
 - `CMakeLists.txt`
+
+No manual file copying is required.
 
 ## Helpful Commands
 

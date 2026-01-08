@@ -4,48 +4,28 @@ This document provides quick instructions for getting started with the MariaDB t
 
 ## Before You Begin
 
-### Required Storage Engine Files
-
-This repository needs the MariaDB ScyllaDB storage engine source files. You must copy the following files from the [mariadb-scylla-storage-engine](https://github.com/GeoffMontee/mariadb-scylla-storage-engine) repository to this directory:
-
-```bash
-# Clone the storage engine repository
-git clone https://github.com/GeoffMontee/mariadb-scylla-storage-engine.git /tmp/storage-engine
-
-# Copy required files to this directory
-cp /tmp/storage-engine/ha_scylla.* .
-cp /tmp/storage-engine/scylla_connection.* .
-cp /tmp/storage-engine/scylla_types.* .
-cp /tmp/storage-engine/scylla_query.* .
-cp /tmp/storage-engine/plugin.cmake .
-cp /tmp/storage-engine/CMakeLists.txt .
-```
-
 ### Install Python Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Quick Start (5 Steps)
+## Quick Start (4 Steps)
 
-### 1. Copy Storage Engine Files
-See "Before You Begin" section above.
-
-### 2. Start Containers
+### 1. Start Containers
 ```bash
 python3 start_db_containers.py
 ```
 
-**Note:** The first run will build MariaDB from source (15-30 minutes). Subsequent runs will be much faster.
+**Note:** The first run will build MariaDB from source (15-30 minutes) and clone the storage engine repository. Subsequent runs will be much faster.
 
-### 3. Load Sample Data
+### 2. Load Sample Data
 ```bash
 mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_schema.sql
 mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_data.sql
 ```
 
-### 4. Setup Migration
+### 3. Setup Migration
 ```bash
 python3 setup_migration.py \
   --mariadb-database testdb \
@@ -59,7 +39,7 @@ This will:
 - Create triggers for replication
 - Migrate existing data
 
-### 5. Test Replication
+### 4. Test Replication
 ```bash
 python3 modify_sample_mariadb_data.py --mariadb-database testdb --scylla-ks target_ks
 ```

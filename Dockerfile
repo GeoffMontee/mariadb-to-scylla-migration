@@ -57,14 +57,22 @@ RUN echo "Cloning MariaDB version ${MARIADB_VERSION}..." && \
     git clone --depth 1 --branch mariadb-${MARIADB_VERSION} \
     https://github.com/MariaDB/server.git /usr/src/mariadb
 
-# Copy ScyllaDB storage engine into MariaDB source tree
-COPY ha_scylla.cc ha_scylla.h \
-     scylla_connection.cc scylla_connection.h \
-     scylla_types.cc scylla_types.h \
-     scylla_query.cc scylla_query.h \
-     plugin.cmake \
-     CMakeLists.txt \
-     /usr/src/mariadb/storage/scylla/
+# Clone ScyllaDB storage engine and copy into MariaDB source tree
+RUN echo "Cloning mariadb-scylla-storage-engine..." && \
+    git clone https://github.com/GeoffMontee/mariadb-scylla-storage-engine.git /tmp/storage-engine && \
+    mkdir -p /usr/src/mariadb/storage/scylla && \
+    cp /tmp/storage-engine/ha_scylla.cc \
+       /tmp/storage-engine/ha_scylla.h \
+       /tmp/storage-engine/scylla_connection.cc \
+       /tmp/storage-engine/scylla_connection.h \
+       /tmp/storage-engine/scylla_types.cc \
+       /tmp/storage-engine/scylla_types.h \
+       /tmp/storage-engine/scylla_query.cc \
+       /tmp/storage-engine/scylla_query.h \
+       /tmp/storage-engine/plugin.cmake \
+       /tmp/storage-engine/CMakeLists.txt \
+       /usr/src/mariadb/storage/scylla/ && \
+    rm -rf /tmp/storage-engine
 
 # Build MariaDB with ScyllaDB storage engine
 # Using Debug build type for full debug symbols in MariaDB and plugin

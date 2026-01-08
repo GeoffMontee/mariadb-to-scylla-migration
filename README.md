@@ -50,7 +50,7 @@ colima start --memory 8 --cpu 4
 Manages MariaDB and ScyllaDB Docker containers with automatic health checks.
 
 **What it does:**
-- Builds MariaDB from source with ScyllaDB storage engine
+- Builds MariaDB from source with ScyllaDB storage engine (automatically clones storage engine repo)
 - Downloads ScyllaDB 2025.4 Docker image
 - Creates a shared Docker network for container communication
 - Starts MariaDB on port 3306
