@@ -335,9 +335,10 @@ def print_connection_info():
     print("    CLI: docker exec -it scylladb-migration-target cqlsh")
     
     print("\nNext Steps:")
-    print("  1. Load sample data: mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_schema.sql")
-    print("  2. Setup migration: python3 setup_migration.py")
-    print("  3. Test replication: python3 modify_sample_mariadb_data.py")
+    print("  1. Load sample schema: mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_schema.sql")
+    print("  2. Load sample data: mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_data.sql")
+    print("  3. Setup migration: python3 setup_migration.py")
+    print("  4. Test replication: python3 modify_sample_mariadb_data.py")
     print()
 
 

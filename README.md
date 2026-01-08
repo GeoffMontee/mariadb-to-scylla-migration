@@ -202,10 +202,10 @@ Wait for both containers to be healthy and ready. The MariaDB build from source 
 ### Step 2: Load Sample Schema and Data (Optional)
 ```bash
 # Load schema
-mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_schema.sql
+mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_schema.sql
 
 # Load data (1000 rows per table)
-mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_data.sql
+mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_data.sql
 ```
 
 ### Step 3: Setup Migration Infrastructure
@@ -230,7 +230,7 @@ This will perform INSERT, UPDATE, and DELETE operations on source tables and sho
 **Option B: Manual testing**
 ```bash
 # Connect to MariaDB
-mariadb -h localhost -u root -prootpassword testdb
+mariadb -h 127.0.0.1 -u root -prootpassword testdb
 
 # Insert data into source table (testdb)
 INSERT INTO animals (animal_id, name, species, age, weight_kg, habitat_name, last_checkup)
@@ -393,7 +393,7 @@ docker ps | grep mariadb
 docker logs mariadb-migration-source
 
 # Test connection
-mariadb -h localhost -u root -prootpassword -e "SELECT 1;"
+mariadb -h 127.0.0.1 -u root -prootpassword -e "SELECT 1;"
 ```
 
 ### ScyllaDB Memory Issues
@@ -418,7 +418,7 @@ python3 start_db_containers.py --rebuild
 ### Verify Replication
 ```bash
 # Count rows in MariaDB
-mariadb -h localhost -u root -prootpassword testdb -e "SELECT COUNT(*) FROM animals;"
+mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "SELECT COUNT(*) FROM animals;"
 
 # Directly in ScyllaDB
 docker exec -it scylladb-migration-target cqlsh -e "SELECT COUNT(*) FROM target_ks.animals;"
