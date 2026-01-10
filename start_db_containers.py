@@ -211,7 +211,7 @@ def main():
             print("  ✓ MariaDB image 'mariadb-scylla:latest' found")
         else:
             print("  ⟳ Rebuilding MariaDB image as requested...")
-            build_mariadb_image(client, mariadb_version)
+            build_mariadb_image(client, mariadb_version, nocache=True)
     except ImageNotFound:
         print("  ℹ MariaDB image not found, building now...")
         print("  ⚠ This will take 15-30 minutes on first run")
@@ -233,10 +233,18 @@ def main():
     print_connection_info()
 
 
-def build_mariadb_image(client, mariadb_version):
-    """Build MariaDB image from Dockerfile."""
+def build_mariadb_image(client, mariadb_version, nocache=False):
+    """Build MariaDB image from Dockerfile.
+    
+    Args:
+        client: Docker client instance
+        mariadb_version: MariaDB version to build (e.g., '12.1.2')
+        nocache: If True, build without using cache (forces complete rebuild)
+    """
     print(f"  Building MariaDB {mariadb_version} image with ScyllaDB storage engine...")
     print("  This may take 15-30 minutes...")
+    if nocache:
+        print("  ⚠ Building without cache (full rebuild)")
     
     # Check if Dockerfile exists
     dockerfile_path = os.path.join(os.getcwd(), "Dockerfile")
@@ -250,6 +258,7 @@ def build_mariadb_image(client, mariadb_version):
             path=os.getcwd(),
             tag="mariadb-scylla:latest",
             rm=True,
+            nocache=nocache,
             buildargs={"MARIADB_VERSION": mariadb_version}
         )
         
