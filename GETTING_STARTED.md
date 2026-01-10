@@ -21,8 +21,8 @@ python3 start_db_containers.py
 
 ### 2. Load Sample Data
 ```bash
-mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_schema.sql
-mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_data.sql
+mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_schema.sql
+mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_data.sql
 ```
 
 ### 3. Setup Migration
@@ -62,7 +62,7 @@ The `reset.sh` script will:
 
 ### Check MariaDB is Running
 ```bash
-mariadb -h localhost -u root -prootpassword testdb -e "SHOW ENGINES;"
+mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "SHOW ENGINES;"
 ```
 
 You should see `SCYLLA` in the list of engines.
@@ -77,10 +77,10 @@ You should see your keyspace (e.g., `target_ks` or `migration`) in the list.
 ### Verify Data Replication
 ```bash
 # Check data in source database (testdb)
-mariadb -h localhost -u root -prootpassword testdb -e "SELECT COUNT(*) FROM animals;"
+mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "SELECT COUNT(*) FROM animals;"
 
 # Check data in ScyllaDB-backed database (scylla_db)
-mariadb -h localhost -u root -prootpassword testdb -e "SELECT COUNT(*) FROM scylla_db.animals;"
+mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "SELECT COUNT(*) FROM scylla_db.animals;"
 
 # Check data in ScyllaDB directly
 docker exec -it scylladb-migration-target cqlsh -e "SELECT COUNT(*) FROM target_ks.animals;"
