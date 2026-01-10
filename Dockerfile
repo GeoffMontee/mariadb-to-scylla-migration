@@ -3,6 +3,9 @@ FROM ubuntu:24.04
 # MariaDB version to build (configurable via --build-arg)
 ARG MARIADB_VERSION=12.1.2
 
+# Build parallelism (configurable via --build-arg)
+ARG BUILD_THREADS=4
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install MariaDB build dependencies
@@ -88,8 +91,8 @@ RUN set -ex && \
     -DPLUGIN_SCYLLA=DYNAMIC \
     -DWITH_EMBEDDED_SERVER=OFF \
     -DWITH_UNIT_TESTS=OFF \
-    && echo "=== Building MariaDB (this will take 15-30 minutes) ===" \
-    && make -j$(nproc) VERBOSE=1 \
+    && echo "=== Building MariaDB with ${BUILD_THREADS} thread(s) ===" \
+    && make -j${BUILD_THREADS} VERBOSE=1 \
     && echo "=== Installing MariaDB ===" \
     && make install \
     && cd / && rm -rf /usr/src/mariadb

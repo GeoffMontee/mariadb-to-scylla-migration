@@ -211,11 +211,15 @@ def main():
             print("  ✓ MariaDB image 'mariadb-scylla:latest' found")
         else:
             print("  ⟳ Rebuilding MariaDB image as requested...")
-            build_mariadb_image(client, mariadb_version, nocache=True)
+            build_mariadb_image(client, mariadb_version, nocache=True, 
+                              build_threads=args.build_threads, 
+                              build_capture_lines=args.build_capture_lines)
     except ImageNotFound:
         print("  ℹ MariaDB image not found, building now...")
         print("  ⚠ This will take 15-30 minutes on first run")
-        build_mariadb_image(client, mariadb_version)
+        build_mariadb_image(client, mariadb_version, 
+                          build_threads=args.build_threads, 
+                          build_capture_lines=args.build_capture_lines)
 
     # Manage MariaDB container
     print("=" * 60)
@@ -233,15 +237,18 @@ def main():
     print_connection_info()
 
 
-def build_mariadb_image(client, mariadb_version, nocache=False):
+def build_mariadb_image(client, mariadb_version, nocache=False, build_threads=4, build_capture_lines=200):
     """Build MariaDB image from Dockerfile.
     
     Args:
         client: Docker client instance
         mariadb_version: MariaDB version to build (e.g., '12.1.2')
         nocache: If True, build without using cache (forces complete rebuild)
+        build_threads: Number of parallel threads for make (1 for sequential, easier debugging)
+        build_capture_lines: Number of log lines to capture and display on error
     """
     print(f"  Building MariaDB {mariadb_version} image with ScyllaDB storage engine...")
+    print(f"  Build threads: {build_threads} {'(sequential, shows errors clearly)' if build_threads == 1 else '(parallel)'}")
     print("  This may take 15-30 minutes...")
     if nocache:
         print("  ⚠ Building without cache (full rebuild)")
@@ -265,7 +272,10 @@ def build_mariadb_image(client, mariadb_version, nocache=False):
             tag="mariadb-scylla:latest",
             rm=True,
             nocache=nocache,
-            buildargs={"MARIADB_VERSION": mariadb_version},
+            buildargs={
+                "MARIADB_VERSION": mariadb_version,
+                "BUILD_THREADS": str(build_threads)
+            },
             decode=True
         )
         
@@ -304,12 +314,13 @@ def build_mariadb_image(client, mariadb_version, nocache=False):
         
         if error_lines:
             print(f"\n  Found errors in build output:")
-            for line in error_lines[-100:]:
+            # Show up to half the capture lines for error context
+            for line in error_lines[-(build_capture_lines // 2):]:
                 if line:
                     print(f"    {line}")
         
-        print(f"\n  Last 200 lines of build output:")
-        for line in log_lines[-200:]:
+        print(f"\n  Last {build_capture_lines} lines of build output:")
+        for line in log_lines[-build_capture_lines:]:
             if line:
                 print(f"    {line}")
         sys.exit(1)
@@ -502,6 +513,10 @@ def parse_arguments():
                         help='Force rebuild of MariaDB Docker image')
     parser.add_argument('--mariadb-version', default='12.1',
                         help='MariaDB version to build (X.Y for latest X.Y.Z, or X.Y.Z for specific version)')
+    parser.add_argument('--build-threads', type=int, default=4,
+                        help='Number of parallel threads for building MariaDB (use 1 to see errors clearly)')
+    parser.add_argument('--build-capture-lines', type=int, default=200,
+                        help='Number of build output lines to capture and display on error')
     
     return parser.parse_args()
 

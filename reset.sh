@@ -2,7 +2,7 @@
 
 python3 destroy_db_containers.py
 
-python3 start_db_containers.py --rebuild --mariadb-version 12.0
+python3 start_db_containers.py --rebuild --build-threads 1 --build-capture-lines 500 --mariadb-version 12.0
 
 # Load schema
 mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_schema.sql
@@ -17,3 +17,4 @@ python3 setup_migration.py \
 python3 modify_sample_mariadb_data.py \
   --mariadb-database testdb \
   --scylla-ks target_ks
+
