@@ -2,7 +2,7 @@
 
 python3 destroy_db_containers.py
 
-python3 start_db_containers.py
+python3 start_db_containers.py --rebuild --mariadb-version 12.0
 
 # Load schema
 mariadb -h localhost -u root -prootpassword testdb < sample_mariadb_schema.sql

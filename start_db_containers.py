@@ -365,7 +365,7 @@ def check_mariadb_health():
     while attempt < max_attempts:
         try:
             result = subprocess.run(
-                ["mariadb", "-h", "localhost", "-u", "root", "-prootpassword", "-e", "SELECT 1"],
+                ["mariadb", "-h", "127.0.0.1", "-u", "root", "-prootpassword", "-e", "SELECT 1"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=5
@@ -427,12 +427,12 @@ def print_connection_info():
     
     print("\nConnection Information:")
     print("\n  MariaDB:")
-    print("    Host: localhost")
+    print("    Host: 127.0.0.1")
     print("    Port: 3306")
     print("    User: root")
     print("    Password: rootpassword")
     print("    Database: testdb")
-    print("    CLI: mariadb -h localhost -u root -prootpassword testdb")
+    print("    CLI: mariadb -h 127.0.0.1 -u root -prootpassword testdb")
     
     print("\n  ScyllaDB:")
     print("    Host: localhost")
