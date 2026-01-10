@@ -252,40 +252,50 @@ def build_mariadb_image(client, mariadb_version, nocache=False):
         print(f"  ✗ Error: Dockerfile not found at {dockerfile_path}")
         sys.exit(1)
     
+    # Stream build logs in real-time and save all lines
+    print("\n  Build output:")
+    log_lines = []
+    build_failed = False
+    error_message = None
+    
     try:
         # Build the image with streaming output
-        image, build_logs = client.images.build(
+        response = client.api.build(
             path=os.getcwd(),
             tag="mariadb-scylla:latest",
             rm=True,
             nocache=nocache,
-            buildargs={"MARIADB_VERSION": mariadb_version}
+            buildargs={"MARIADB_VERSION": mariadb_version},
+            decode=True
         )
         
-        # Stream build logs in real-time and save all lines
-        print("\n  Build output:")
-        log_lines = []
-        for chunk in build_logs:
+        # Process build logs
+        for chunk in response:
             if 'stream' in chunk:
                 line = chunk['stream'].rstrip()
                 log_lines.append(line)
-                # Print each line as it comes in
                 if line:
                     print(f"    {line}")
             elif 'error' in chunk:
-                print(f"    ERROR: {chunk['error']}")
-                log_lines.append(f"ERROR: {chunk['error']}")
+                error_message = chunk['error']
+                log_lines.append(f"ERROR: {error_message}")
+                print(f"    ERROR: {error_message}")
+                build_failed = True
+            elif 'errorDetail' in chunk:
+                error_detail = chunk['errorDetail'].get('message', str(chunk['errorDetail']))
+                log_lines.append(f"ERROR DETAIL: {error_detail}")
         
-        print(f"  ✓ MariaDB image built successfully")
+        if build_failed:
+            raise Exception(error_message or "Build failed")
+            
+        print(f"\n  ✓ MariaDB image built successfully")
         
     except Exception as e:
         print(f"\n  ✗ Error building MariaDB image: {e}")
         print(f"\n  Last 50 lines of build output:")
-        # Print more context on error
-        if 'log_lines' in locals():
-            for line in log_lines[-50:]:
-                if line:
-                    print(f"    {line}")
+        for line in log_lines[-50:]:
+            if line:
+                print(f"    {line}")
         sys.exit(1)
 
 
