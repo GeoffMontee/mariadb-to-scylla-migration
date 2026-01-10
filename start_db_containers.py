@@ -25,9 +25,114 @@ def ensure_network(client, network_name):
         return network
 
 
+def query_mariadb_tags():
+    """Query available MariaDB tags from GitHub."""
+    try:
+        result = subprocess.run(
+            ['git', 'ls-remote', '--tags', 'https://github.com/MariaDB/server.git'],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            print(f"  ✗ Error querying git tags: {result.stderr}")
+            return []
+        
+        tags = []
+        for line in result.stdout.split('\n'):
+            if 'refs/tags/mariadb-' in line:
+                # Extract tag name (e.g., mariadb-10.5.9)
+                tag = line.split('refs/tags/')[-1].strip()
+                # Remove ^{} suffix if present
+                if tag.endswith('^{}'):
+                    tag = tag[:-3]
+                if tag.startswith('mariadb-'):
+                    tags.append(tag)
+        return tags
+    except subprocess.TimeoutExpired:
+        print("  ✗ Error: git ls-remote timed out")
+        return []
+    except FileNotFoundError:
+        print("  ✗ Error: git command not found")
+        return []
+    except Exception as e:
+        print(f"  ✗ Error querying tags: {e}")
+        return []
+
+
+def parse_version(version_str):
+    """Parse version string into tuple of integers for comparison."""
+    try:
+        parts = version_str.replace('mariadb-', '').split('.')
+        return tuple(int(p) for p in parts)
+    except (ValueError, AttributeError):
+        return None
+
+
+def resolve_mariadb_version(version_spec):
+    """Resolve MariaDB version specification to full X.Y.Z version.
+    
+    Args:
+        version_spec: Either X.Y (find latest Z) or X.Y.Z (use as-is)
+    
+    Returns:
+        Full version string X.Y.Z or None if not found
+    """
+    parts = version_spec.split('.')
+    
+    # If 3-digit version provided, verify it exists
+    if len(parts) == 3:
+        print(f"  Looking for MariaDB version {version_spec}...")
+        tags = query_mariadb_tags()
+        target_tag = f"mariadb-{version_spec}"
+        if target_tag in tags:
+            print(f"  ✓ Found version {version_spec}")
+            return version_spec
+        else:
+            print(f"  ✗ Version {version_spec} not found")
+            return None
+    
+    # If 2-digit version provided, find latest Z
+    elif len(parts) == 2:
+        major, minor = parts
+        print(f"  Looking for latest MariaDB {major}.{minor}.x version...")
+        tags = query_mariadb_tags()
+        
+        # Filter tags matching X.Y.* pattern
+        matching_tags = []
+        prefix = f"mariadb-{major}.{minor}."
+        for tag in tags:
+            if tag.startswith(prefix):
+                version_tuple = parse_version(tag)
+                if version_tuple and len(version_tuple) == 3:
+                    matching_tags.append((tag, version_tuple))
+        
+        if not matching_tags:
+            print(f"  ✗ No versions found matching {major}.{minor}.x")
+            return None
+        
+        # Find max version using semantic version comparison
+        latest_tag, latest_version = max(matching_tags, key=lambda x: x[1])
+        version_str = '.'.join(map(str, latest_version))
+        print(f"  ✓ Found latest version: {version_str}")
+        return version_str
+    
+    else:
+        print(f"  ✗ Invalid version format: {version_spec} (expected X.Y or X.Y.Z)")
+        return None
+
+
 def main():
     """Main function to start and manage database containers."""
     args = parse_arguments()
+    
+    # Resolve MariaDB version
+    print("Resolving MariaDB version...")
+    mariadb_version = resolve_mariadb_version(args.mariadb_version)
+    if not mariadb_version:
+        print(f"\n✗ Failed to resolve MariaDB version '{args.mariadb_version}'")
+        sys.exit(1)
+    print()
     
     try:
         client = docker.from_env()
@@ -106,11 +211,11 @@ def main():
             print("  ✓ MariaDB image 'mariadb-scylla:latest' found")
         else:
             print("  ⟳ Rebuilding MariaDB image as requested...")
-            build_mariadb_image(client)
+            build_mariadb_image(client, mariadb_version)
     except ImageNotFound:
         print("  ℹ MariaDB image not found, building now...")
         print("  ⚠ This will take 15-30 minutes on first run")
-        build_mariadb_image(client)
+        build_mariadb_image(client, mariadb_version)
 
     # Manage MariaDB container
     print("=" * 60)
@@ -128,9 +233,9 @@ def main():
     print_connection_info()
 
 
-def build_mariadb_image(client):
+def build_mariadb_image(client, mariadb_version):
     """Build MariaDB image from Dockerfile."""
-    print("  Building MariaDB image with ScyllaDB storage engine...")
+    print(f"  Building MariaDB {mariadb_version} image with ScyllaDB storage engine...")
     print("  This may take 15-30 minutes...")
     
     # Check if Dockerfile exists
@@ -145,7 +250,7 @@ def build_mariadb_image(client):
             path=os.getcwd(),
             tag="mariadb-scylla:latest",
             rm=True,
-            buildargs={"MARIADB_VERSION": "12.1.2"}
+            buildargs={"MARIADB_VERSION": mariadb_version}
         )
         
         # Print last few lines of build output
@@ -351,6 +456,8 @@ def parse_arguments():
     
     parser.add_argument('--rebuild', action='store_true',
                         help='Force rebuild of MariaDB Docker image')
+    parser.add_argument('--mariadb-version', default='12.1',
+                        help='MariaDB version to build (X.Y for latest X.Y.Z, or X.Y.Z for specific version)')
     
     return parser.parse_args()
 
