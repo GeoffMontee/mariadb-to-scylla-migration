@@ -77,7 +77,9 @@ RUN echo "Cloning mariadb-scylla-storage-engine..." && \
 # Build MariaDB with ScyllaDB storage engine
 # Using Debug build type for full debug symbols in MariaDB and plugin
 WORKDIR /usr/src/mariadb
-RUN mkdir build && cd build && \
+RUN set -ex && \
+    mkdir build && cd build && \
+    echo "=== Running CMake ===" && \
     cmake .. \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_INSTALL_PREFIX=/usr \
@@ -86,9 +88,11 @@ RUN mkdir build && cd build && \
     -DPLUGIN_SCYLLA=DYNAMIC \
     -DWITH_EMBEDDED_SERVER=OFF \
     -DWITH_UNIT_TESTS=OFF \
-    && make -j$(nproc) && \
-    make install && \
-    cd / && rm -rf /usr/src/mariadb
+    && echo "=== Building MariaDB (this will take 15-30 minutes) ===" \
+    && make -j$(nproc) VERBOSE=1 \
+    && echo "=== Installing MariaDB ===" \
+    && make install \
+    && cd / && rm -rf /usr/src/mariadb
 
 # Create MariaDB user and directories
 RUN useradd -r -s /bin/false mysql && \

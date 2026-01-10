@@ -253,7 +253,7 @@ def build_mariadb_image(client, mariadb_version, nocache=False):
         sys.exit(1)
     
     try:
-        # Build the image
+        # Build the image with streaming output
         image, build_logs = client.images.build(
             path=os.getcwd(),
             tag="mariadb-scylla:latest",
@@ -262,21 +262,30 @@ def build_mariadb_image(client, mariadb_version, nocache=False):
             buildargs={"MARIADB_VERSION": mariadb_version}
         )
         
-        # Print last few lines of build output
-        print("\n  Build output (last 10 lines):")
+        # Stream build logs in real-time and save all lines
+        print("\n  Build output:")
         log_lines = []
         for chunk in build_logs:
             if 'stream' in chunk:
-                log_lines.append(chunk['stream'].strip())
-        
-        for line in log_lines[-10:]:
-            if line:
-                print(f"    {line}")
+                line = chunk['stream'].rstrip()
+                log_lines.append(line)
+                # Print each line as it comes in
+                if line:
+                    print(f"    {line}")
+            elif 'error' in chunk:
+                print(f"    ERROR: {chunk['error']}")
+                log_lines.append(f"ERROR: {chunk['error']}")
         
         print(f"  ✓ MariaDB image built successfully")
         
     except Exception as e:
-        print(f"  ✗ Error building MariaDB image: {e}")
+        print(f"\n  ✗ Error building MariaDB image: {e}")
+        print(f"\n  Last 50 lines of build output:")
+        # Print more context on error
+        if 'log_lines' in locals():
+            for line in log_lines[-50:]:
+                if line:
+                    print(f"    {line}")
         sys.exit(1)
 
 
