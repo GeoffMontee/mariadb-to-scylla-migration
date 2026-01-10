@@ -292,8 +292,24 @@ def build_mariadb_image(client, mariadb_version, nocache=False):
         
     except Exception as e:
         print(f"\n  ✗ Error building MariaDB image: {e}")
-        print(f"\n  Last 50 lines of build output:")
-        for line in log_lines[-50:]:
+        
+        # Find actual error messages
+        error_lines = []
+        for i, line in enumerate(log_lines):
+            if 'error:' in line.lower() or 'fatal:' in line.lower():
+                # Include context around errors (5 lines before and after)
+                start = max(0, i - 5)
+                end = min(len(log_lines), i + 6)
+                error_lines.extend(log_lines[start:end])
+        
+        if error_lines:
+            print(f"\n  Found errors in build output:")
+            for line in error_lines[-100:]:
+                if line:
+                    print(f"    {line}")
+        
+        print(f"\n  Last 200 lines of build output:")
+        for line in log_lines[-200:]:
             if line:
                 print(f"    {line}")
         sys.exit(1)
