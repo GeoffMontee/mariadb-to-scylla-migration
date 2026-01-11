@@ -91,6 +91,8 @@ def parse_arguments():
                               help='MariaDB database for ScyllaDB-backed tables')
     mariadb_group.add_argument('--mariadb-docker-container', default='mariadb-migration-source',
                               help='MariaDB docker container name')
+    mariadb_group.add_argument('--mariadb-verbose', action='store_true',
+                              help='Enable verbose logging in ScyllaDB storage engine')
     
     # ScyllaDB options
     scylla_group = parser.add_argument_group('ScyllaDB options')
@@ -245,6 +247,10 @@ def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_k
         
         # Embed connection info in COMMENT (persists across restarts)
         comment = f"scylla_hosts={scylla_host};scylla_keyspace={scylla_keyspace};scylla_table={table}"
+        
+        # Add verbose option if enabled
+        if args.mariadb_verbose:
+            comment += ";scylla_verbose=true"
         
         create_stmt = f"""
             CREATE TABLE IF NOT EXISTS `{scylla_database}`.`{table}` (

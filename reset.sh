@@ -12,6 +12,7 @@ mariadb -h 127.0.0.1 -u root -prootpassword testdb < sample_mariadb_data.sql
 
 python3 setup_migration.py \
   --mariadb-database testdb \
+  --mariadb-verbose \
   --scylla-ks target_ks
 
 python3 modify_sample_mariadb_data.py \
