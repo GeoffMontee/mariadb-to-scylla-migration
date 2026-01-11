@@ -156,6 +156,18 @@ def configure_storage_engine(conn, args):
     # Global variables don't persist across restarts and aren't available in trigger context
     # Connection info is now embedded in each table's COMMENT field
     print(f"  ℹ Using per-table connection configuration (embedded in COMMENT)")
+    
+    # Enable verbose logging if requested
+    if args.mariadb_verbose:
+        cursor = conn.cursor()
+        try:
+            print(f"  ℹ Enabling verbose logging (log_warnings=4)...")
+            cursor.execute("SET GLOBAL log_warnings=4")
+            print(f"  ✓ Verbose logging enabled")
+        except Exception as e:
+            print(f"  ⚠ Warning: Could not set log_warnings: {e}")
+        finally:
+            cursor.close()
 
 
 def create_scylla_database(conn, scylla_database):
