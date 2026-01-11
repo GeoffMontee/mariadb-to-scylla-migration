@@ -271,7 +271,7 @@ def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_k
         cursor.close()
 
 
-def create_replication_triggers(conn, source_database, scylla_database, table):
+def create_replication_triggers(conn, source_database, scylla_database, table, args):
     """Create INSERT/UPDATE/DELETE triggers to replicate changes to ScyllaDB."""
     cursor = conn.cursor()
     try:
@@ -303,40 +303,72 @@ def create_replication_triggers(conn, source_database, scylla_database, table):
         
         print(f"  Creating replication triggers for {source_database}.{table}...")
         
-        # Create INSERT trigger
+        # Prepare debug log statements if verbose mode is enabled
+        debug_start_insert = ""
+        debug_end_insert = ""
+        debug_start_update = ""
+        debug_end_update = ""
+        debug_start_delete = ""
+        debug_end_delete = ""
+        
+        if args.mariadb_verbose:
+            debug_start_insert = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger START';"
+            debug_end_insert = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger END';"
+            debug_start_update = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_update_trigger START';"
+            debug_end_update = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_update_trigger END';"
+            debug_start_delete = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger START';"
+            debug_end_delete = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger END';"
+        
+        # Create INSERT trigger with proper delimiter
+        cursor.execute("DELIMITER $$")
         insert_trigger = f"""
 CREATE TRIGGER `{source_database}`.`{table}_insert_trigger`
 AFTER INSERT ON `{source_database}`.`{table}`
 FOR EACH ROW
-INSERT INTO `{scylla_database}`.`{table}` ({col_list})
-VALUES ({new_col_list})
+BEGIN
+    {debug_start_insert}
+    INSERT INTO `{scylla_database}`.`{table}` ({col_list})
+    VALUES ({new_col_list});
+    {debug_end_insert}
+END$$
         """
+        cursor.execute(insert_trigger)
+        cursor.execute("DELIMITER ;")
+        print(f"    ✓ INSERT trigger created")
         
-        # Create UPDATE trigger (delete + insert pattern)
+        # Create UPDATE trigger with UPDATE statement
+        update_col_list = ', '.join([f"`{c}` = NEW.`{c}`" for c in col_names])
+        cursor.execute("DELIMITER $$")
         update_trigger = f"""
 CREATE TRIGGER `{source_database}`.`{table}_update_trigger`
 AFTER UPDATE ON `{source_database}`.`{table}`
 FOR EACH ROW
 BEGIN
-    DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause};
-    INSERT INTO `{scylla_database}`.`{table}` ({col_list})
-    VALUES ({new_col_list});
-END
+    {debug_start_update}
+    UPDATE `{scylla_database}`.`{table}`
+    SET {update_col_list}
+    WHERE {where_clause};
+    {debug_end_update}
+END$$
         """
+        cursor.execute(update_trigger)
+        cursor.execute("DELIMITER ;")
+        print(f"    ✓ UPDATE trigger created")
         
-        # Create DELETE trigger
+        # Create DELETE trigger with proper delimiter
+        cursor.execute("DELIMITER $$")
         delete_trigger = f"""
 CREATE TRIGGER `{source_database}`.`{table}_delete_trigger`
 AFTER DELETE ON `{source_database}`.`{table}`
 FOR EACH ROW
-DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause}
+BEGIN
+    {debug_start_delete}
+    DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause};
+    {debug_end_delete}
+END$$
         """
-        
-        cursor.execute(insert_trigger)
-        print(f"    ✓ INSERT trigger created")
-        cursor.execute(update_trigger)
-        print(f"    ✓ UPDATE trigger created")
         cursor.execute(delete_trigger)
+        cursor.execute("DELIMITER ;")
         print(f"    ✓ DELETE trigger created")
         
         return True
@@ -394,7 +426,7 @@ def setup_table_migration(mariadb_conn, scylla_session, table_name, args):
                                     args.scylla_ks, args.scylla_fdw_host, args.scylla_port, table_name, args)
         
         # Create triggers to replicate changes
-        create_replication_triggers(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, table_name)
+        create_replication_triggers(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, table_name, args)
         
     finally:
         cursor.close()
