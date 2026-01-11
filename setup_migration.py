@@ -217,7 +217,7 @@ def get_table_schema(conn, database, table):
         cursor.close()
 
 
-def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_keyspace, scylla_host, scylla_port, table):
+def create_mariadb_scylla_table(conn, source_database, scylla_database, scylla_keyspace, scylla_host, scylla_port, table, args):
     """Create a ScyllaDB-backed table in the scylla_database."""
     cursor = conn.cursor()
     try:
@@ -391,7 +391,7 @@ def setup_table_migration(mariadb_conn, scylla_session, table_name, args):
         
         # Create ScyllaDB-backed table in MariaDB scylla_database
         create_mariadb_scylla_table(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, 
-                                    args.scylla_ks, args.scylla_fdw_host, args.scylla_port, table_name)
+                                    args.scylla_ks, args.scylla_fdw_host, args.scylla_port, table_name, args)
         
         # Create triggers to replicate changes
         create_replication_triggers(mariadb_conn, args.mariadb_database, args.mariadb_scylla_database, table_name)
