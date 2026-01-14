@@ -331,8 +331,7 @@ def create_replication_triggers(conn, source_database, scylla_database, table, a
             debug_start_delete = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger START';"
             debug_end_delete = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger END';"
         
-        # Create INSERT trigger with proper delimiter
-        cursor.execute("DELIMITER $$")
+        # Create INSERT trigger
         insert_trigger = f"""
 CREATE TRIGGER `{source_database}`.`{table}_insert_trigger`
 AFTER INSERT ON `{source_database}`.`{table}`
@@ -342,15 +341,13 @@ BEGIN
     INSERT INTO `{scylla_database}`.`{table}` ({col_list})
     VALUES ({new_col_list});
     {debug_end_insert}
-END$$
+END
         """
         cursor.execute(insert_trigger)
-        cursor.execute("DELIMITER ;")
         print(f"    ✓ INSERT trigger created")
         
         # Create UPDATE trigger with UPDATE statement
         update_col_list = ', '.join([f"`{c}` = NEW.`{c}`" for c in col_names])
-        cursor.execute("DELIMITER $$")
         update_trigger = f"""
 CREATE TRIGGER `{source_database}`.`{table}_update_trigger`
 AFTER UPDATE ON `{source_database}`.`{table}`
@@ -361,14 +358,12 @@ BEGIN
     SET {update_col_list}
     WHERE {where_clause};
     {debug_end_update}
-END$$
+END
         """
         cursor.execute(update_trigger)
-        cursor.execute("DELIMITER ;")
         print(f"    ✓ UPDATE trigger created")
         
-        # Create DELETE trigger with proper delimiter
-        cursor.execute("DELIMITER $$")
+        # Create DELETE trigger
         delete_trigger = f"""
 CREATE TRIGGER `{source_database}`.`{table}_delete_trigger`
 AFTER DELETE ON `{source_database}`.`{table}`
@@ -377,10 +372,9 @@ BEGIN
     {debug_start_delete}
     DELETE FROM `{scylla_database}`.`{table}` WHERE {where_clause};
     {debug_end_delete}
-END$$
+END
         """
         cursor.execute(delete_trigger)
-        cursor.execute("DELIMITER ;")
         print(f"    ✓ DELETE trigger created")
         
         return True
