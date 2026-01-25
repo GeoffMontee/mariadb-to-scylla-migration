@@ -114,4 +114,4 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 3306
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["/usr/bin/mariadbd","--user=mysql","--datadir=/var/lib/mysql","--socket=/tmp/mysql_init.sock","--plugin-maturity=unknown","--core-file"]
+CMD ["/usr/bin/mariadbd","--user=mysql","--datadir=/var/lib/mysql","--socket=/tmp/mysql_init.sock","--log-bin=mariadbd-bin","--binlog-format=ROW","--sync-binlog=1","--plugin-maturity=unknown","--core-file","--gdb","--log-warnings=4"]
