@@ -32,6 +32,11 @@ def main():
     print("\n[3/5] Creating ScyllaDB database in MariaDB...")
     create_scylla_database(mariadb_conn, args.mariadb_scylla_database)
     
+    # Step 3.5: Create debug log table if verbose mode enabled
+    if args.mariadb_verbose:
+        print("\n[3.5/5] Creating debug log table...")
+        create_debug_log_table(mariadb_conn, args.mariadb_database)
+    
     # Step 4: Get tables and setup migration
     print("\n[4/5] Setting up table migration...")
     tables = get_source_tables(mariadb_conn, args.mariadb_database)
@@ -183,9 +188,36 @@ def create_scylla_database(conn, scylla_database):
     finally:
         cursor.close()
 
+def create_debug_log_table(conn, database):
+    """Create a debug log table for trigger debugging."""
+    cursor = conn.cursor()
+    try:
+        print(f"  Creating debug log table in '{database}'...")
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS `{database}`.`_trigger_debug_log` (
+                log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                log_timestamp TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+                table_name VARCHAR(64) NOT NULL,
+                trigger_name VARCHAR(64) NOT NULL,
+                event_type ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+                phase ENUM('START', 'END') NOT NULL,
+                primary_key_value VARCHAR(255),
+                INDEX idx_timestamp (log_timestamp),
+                INDEX idx_table (table_name, log_timestamp)
+            ) ENGINE=InnoDB
+        """)
+        print(f"  ✓ Debug log table ready")
+    except Exception as e:
+        print(f"  ✗ Error creating debug log table: {e}")
+        raise
+    finally:
+        cursor.close()
 
 def get_source_tables(conn, database):
-    """Get list of tables in the source database."""
+    """Get list of tables in the source database.
+    
+    Excludes internal tables (those starting with underscore).
+    """
     cursor = conn.cursor()
     try:
         cursor.execute(f"""
@@ -193,6 +225,7 @@ def get_source_tables(conn, database):
             FROM information_schema.tables
             WHERE table_schema = '{database}'
             AND table_type = 'BASE TABLE'
+            AND table_name NOT LIKE '\\_%'
             ORDER BY table_name
         """)
         
@@ -315,6 +348,9 @@ def create_replication_triggers(conn, source_database, scylla_database, table, a
         
         print(f"  Creating replication triggers for {source_database}.{table}...")
         
+        # Get primary key column for debug logging
+        pk_col = primary_keys[0] if primary_keys else 'NULL'
+        
         # Prepare debug log statements if verbose mode is enabled
         debug_start_insert = ""
         debug_end_insert = ""
@@ -324,12 +360,31 @@ def create_replication_triggers(conn, source_database, scylla_database, table, a
         debug_end_delete = ""
         
         if args.mariadb_verbose:
-            debug_start_insert = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger START';"
-            debug_end_insert = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger END';"
-            debug_start_update = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_update_trigger START';"
-            debug_end_update = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_update_trigger END';"
-            debug_start_delete = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger START';"
-            debug_end_delete = f"SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger END';"
+            # Use both SIGNAL (for immediate feedback) and table logging (for reliable history)
+            debug_start_insert = f"""
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger START';
+    INSERT INTO `{source_database}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_insert_trigger', 'INSERT', 'START', CAST(NEW.`{pk_col}` AS CHAR));"""
+            debug_end_insert = f"""
+    INSERT INTO `{source_database}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_insert_trigger', 'INSERT', 'END', CAST(NEW.`{pk_col}` AS CHAR));
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger END';"""
+            debug_start_update = f"""
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_update_trigger START';
+    INSERT INTO `{source_database}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_update_trigger', 'UPDATE', 'START', CAST(OLD.`{pk_col}` AS CHAR));"""
+            debug_end_update = f"""
+    INSERT INTO `{source_database}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_update_trigger', 'UPDATE', 'END', CAST(NEW.`{pk_col}` AS CHAR));
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_update_trigger END';"""
+            debug_start_delete = f"""
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger START';
+    INSERT INTO `{source_database}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_delete_trigger', 'DELETE', 'START', CAST(OLD.`{pk_col}` AS CHAR));"""
+            debug_end_delete = f"""
+    INSERT INTO `{source_database}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_delete_trigger', 'DELETE', 'END', CAST(OLD.`{pk_col}` AS CHAR));
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_delete_trigger END';"""
         
         # Create INSERT trigger
         insert_trigger = f"""

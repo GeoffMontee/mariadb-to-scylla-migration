@@ -119,6 +119,72 @@ END
 """
 ```
 
+### Debug Logging
+
+When `--mariadb-verbose` is enabled:
+
+1. **Debug table is created** in the source database:
+```python
+f"""
+CREATE TABLE IF NOT EXISTS `{database}`.`_trigger_debug_log` (
+    log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    log_timestamp TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+    table_name VARCHAR(64) NOT NULL,
+    trigger_name VARCHAR(64) NOT NULL,
+    event_type ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+    phase ENUM('START', 'END') NOT NULL,
+    primary_key_value VARCHAR(255),
+    INDEX idx_timestamp (log_timestamp),
+    INDEX idx_table (table_name, log_timestamp)
+) ENGINE=InnoDB
+"""
+```
+
+2. **Triggers log both to SIGNAL and debug table**:
+```python
+# Insert trigger with debug logging
+f"""
+CREATE TRIGGER `{source_db}`.`{table}_insert_trigger`
+AFTER INSERT ON `{source_db}`.`{table}`
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger START';
+    INSERT INTO `{source_db}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_insert_trigger', 'INSERT', 'START', CAST(NEW.`{pk_col}` AS CHAR));
+    
+    INSERT INTO `{scylla_db}`.`{table}` ({col_list})
+    VALUES ({new_col_list});
+    
+    INSERT INTO `{source_db}`.`_trigger_debug_log` (table_name, trigger_name, event_type, phase, primary_key_value)
+    VALUES ('{table}', '{table}_insert_trigger', 'INSERT', 'END', CAST(NEW.`{pk_col}` AS CHAR));
+    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'DEBUG: {table}_insert_trigger END';
+END
+"""
+```
+
+3. **Query debug logs**:
+```sql
+-- Recent trigger executions
+SELECT * FROM testdb._trigger_debug_log 
+ORDER BY log_timestamp DESC LIMIT 100;
+
+-- Check for incomplete executions (START without END)
+SELECT d1.*
+FROM testdb._trigger_debug_log d1
+LEFT JOIN testdb._trigger_debug_log d2
+  ON d1.trigger_name = d2.trigger_name
+  AND d1.primary_key_value = d2.primary_key_value
+  AND d1.phase = 'START' AND d2.phase = 'END'
+  AND d2.log_timestamp > d1.log_timestamp
+WHERE d1.phase = 'START' AND d2.log_id IS NULL;
+```
+
+**Important notes:**
+- `_trigger_debug_log` is automatically excluded from migration (tables starting with `_`)
+- Uses MariaDB-only features: AUTO_INCREMENT, ENUM, microsecond timestamps
+- Provides both SIGNAL warnings (immediate feedback) and table logging (reliable history)
+- Log to both locations to maximize debugging visibility
+
 ### ScyllaDB-Backed Table Creation
 
 ```python
@@ -141,6 +207,11 @@ SELECT * FROM `{source_db}`.`{table}`
 ```
 
 ## Important Constraints
+
+### Internal Tables
+- **Tables starting with underscore are excluded** from migration
+- Used for internal/system tables like `_trigger_debug_log`
+- Filter pattern: `AND table_name NOT LIKE '\\_%'` in `get_source_tables()`
 
 ### Primary Keys Required
 - **All tables MUST have a primary key** for ScyllaDB
@@ -239,6 +310,38 @@ cursor.execute(f"""
     WHERE trigger_schema = '{source_db}'
     AND event_object_table = '{table}'
     ORDER BY trigger_name
+""")
+```
+
+### Debugging Trigger Execution
+
+```python
+# Check recent trigger activity (requires --mariadb-verbose mode)
+cursor.execute(f"""
+    SELECT 
+        table_name,
+        trigger_name,
+        event_type,
+        COUNT(*) as executions,
+        MAX(log_timestamp) as last_execution
+    FROM `{source_db}`.`_trigger_debug_log`
+    GROUP BY table_name, trigger_name, event_type
+    ORDER BY last_execution DESC
+""")
+
+# Find incomplete trigger executions (START without END)
+cursor.execute(f"""
+    SELECT d1.*
+    FROM `{source_db}`.`_trigger_debug_log` d1
+    LEFT JOIN `{source_db}`.`_trigger_debug_log` d2
+      ON d1.trigger_name = d2.trigger_name
+      AND d1.primary_key_value = d2.primary_key_value
+      AND d1.phase = 'START'
+      AND d2.phase = 'END'
+      AND d2.log_timestamp > d1.log_timestamp
+    WHERE d1.phase = 'START' AND d2.log_id IS NULL
+    ORDER BY d1.log_timestamp DESC
+    LIMIT 20
 """)
 ```
 

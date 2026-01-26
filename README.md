@@ -139,6 +139,46 @@ ScyllaDB options:
 - `--scylla-fdw-host` - ScyllaDB host for storage engine (default: scylladb-migration-target)
 - `--scylla-docker-container` - Container name (default: scylladb-migration-target)
 
+Debug options:
+- `--mariadb-verbose` - Enable debug logging for triggers (creates _trigger_debug_log table)
+
+**Debug Mode:**
+
+When running with `--mariadb-verbose`, the setup script will:
+1. Create a `_trigger_debug_log` table in the source database
+2. Modify all triggers to log START/END events with primary key values
+3. Log to both MariaDB warning log (SIGNAL) and the debug table
+
+To query debug logs:
+```sql
+-- View recent trigger executions
+SELECT * FROM testdb._trigger_debug_log 
+ORDER BY log_timestamp DESC 
+LIMIT 100;
+
+-- Check specific table's trigger activity
+SELECT * FROM testdb._trigger_debug_log 
+WHERE table_name = 'animals'
+ORDER BY log_timestamp DESC;
+
+-- Find incomplete trigger executions (START without END)
+SELECT d1.*
+FROM testdb._trigger_debug_log d1
+LEFT JOIN testdb._trigger_debug_log d2
+  ON d1.trigger_name = d2.trigger_name
+  AND d1.primary_key_value = d2.primary_key_value
+  AND d1.phase = 'START'
+  AND d2.phase = 'END'
+  AND d2.log_timestamp > d1.log_timestamp
+WHERE d1.phase = 'START' AND d2.log_id IS NULL;
+```
+
+The `_trigger_debug_log` table:
+- Is automatically excluded from migration (internal table)
+- Uses MariaDB-only features (AUTO_INCREMENT, ENUM)
+- Stores microsecond-precision timestamps
+- Includes indexes for efficient querying
+
 ### 3. destroy_db_containers.py
 
 Cleans up all Docker containers and resources created by the migration toolkit.
@@ -423,6 +463,56 @@ mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "SELECT COUNT(*) FROM anim
 # Directly in ScyllaDB
 docker exec -it scylladb-migration-target cqlsh -e "SELECT COUNT(*) FROM target_ks.animals;"
 ```
+
+### Debug Trigger Execution
+
+If you suspect triggers are not firing or failing silently, enable debug mode:
+
+```bash
+# Setup with debug logging enabled
+python3 setup_migration.py --mariadb-verbose
+
+# Perform some operations
+python3 modify_sample_mariadb_data.py
+
+# Check debug logs
+mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "
+SELECT 
+  table_name,
+  trigger_name,
+  event_type,
+  COUNT(*) as executions,
+  MAX(log_timestamp) as last_execution
+FROM _trigger_debug_log
+GROUP BY table_name, trigger_name, event_type
+ORDER BY last_execution DESC;
+"
+
+# Check for failed trigger executions (START without matching END)
+mariadb -h 127.0.0.1 -u root -prootpassword testdb -e "
+SELECT 
+  d1.log_timestamp,
+  d1.table_name,
+  d1.trigger_name,
+  d1.primary_key_value
+FROM _trigger_debug_log d1
+LEFT JOIN _trigger_debug_log d2
+  ON d1.trigger_name = d2.trigger_name
+  AND d1.primary_key_value = d2.primary_key_value
+  AND d1.phase = 'START'
+  AND d2.phase = 'END'
+  AND d2.log_timestamp > d1.log_timestamp
+WHERE d1.phase = 'START' AND d2.log_id IS NULL
+ORDER BY d1.log_timestamp DESC
+LIMIT 20;
+"
+```
+
+The debug log table provides:
+- **Execution tracking**: Every trigger START/END is logged
+- **Timing analysis**: Microsecond timestamps for performance analysis
+- **Failure detection**: Missing END events indicate trigger failures
+- **Primary key tracking**: See which specific rows were affected
 
 ## Contributing
 
