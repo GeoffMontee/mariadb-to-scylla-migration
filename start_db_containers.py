@@ -182,7 +182,10 @@ def main():
         },
         "detach": True,
         "remove": False,
-        "network": network_name
+        "network": network_name,
+        # Enable debugging with gdb
+        "cap_add": ["SYS_PTRACE"],
+        "security_opt": ["seccomp=unconfined"]
     }
 
     scylla_config = {
